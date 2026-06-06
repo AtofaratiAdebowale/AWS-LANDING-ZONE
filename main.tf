@@ -2,10 +2,10 @@ terraform {
   required_version = ">= 1.6.0"
 
   cloud {
-    organization = "CloudGenius"
+    organization = "CGIATO2"
 
     workspaces {
-      name = "AWS-LANDING-ZONE-ADIRYX"
+      name = "AWS-LANDING-ZONE"
     }
   }
 

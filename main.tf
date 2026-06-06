@@ -1,3 +1,4 @@
+```hcl
 terraform {
   required_version = ">= 1.6.0"
 
@@ -17,63 +18,63 @@ terraform {
   }
 }
 
+#################################################
+# AWS PROVIDER
+#################################################
+
 provider "aws" {
   region = "us-east-1"
 }
 
 #################################################
-# IMPORT EXISTING AWS ORGANIZATION AND ACCOUNTS
+# EXISTING AWS ORGANIZATION - READ ONLY
 #################################################
-
-import {
-  to = aws_organizations_organization.adiryx
-  id = "o-5myqq34j5n"
-}
-
-import {
-  to = aws_organizations_account.test
-  id = "295435084681"
-}
-
-import {
-  to = aws_organizations_account.network
-  id = "146727531495"
-}
-
-import {
-  to = aws_organizations_account.identity
-  id = "459524413424"
-}
-
-import {
-  to = aws_organizations_account.soc_platform
-  id = "124074140738"
-}
-
-#################################################
-# EXISTING AWS ORGANIZATION
-#################################################
-
-resource "aws_organizations_organization" "adiryx" {
-  feature_set = "ALL"
-
-  aws_service_access_principals = [
-    "account.amazonaws.com",
-    "cloudtrail.amazonaws.com",
-    "config.amazonaws.com",
-    "guardduty.amazonaws.com",
-    "securityhub.amazonaws.com",
-    "sso.amazonaws.com"
-  ]
-
-  enabled_policy_types = [
-    "SERVICE_CONTROL_POLICY"
-  ]
-}
 
 data "aws_organizations_organization" "current" {}
 
+#################################################
+# LANDING ZONE LOCALS
+#################################################
+
 locals {
-  root_id               = data.aws_organizations_organization.current.roots[0].id
+  organization_id       = "o-5myqq34j5n"
   management_account_id = "719850720600"
+  root_id               = data.aws_organizations_organization.current.roots[0].id
+
+  existing_accounts = {
+    test         = "295435084681"
+    network      = "146727531495"
+    identity     = "459524413424"
+    soc_platform = "124074140738"
+  }
 }
+
+#################################################
+# OUTPUTS
+#################################################
+
+output "organization_id" {
+  description = "Existing AWS Organization ID."
+  value       = data.aws_organizations_organization.current.id
+}
+
+output "organization_arn" {
+  description = "Existing AWS Organization ARN."
+  value       = data.aws_organizations_organization.current.arn
+}
+
+output "root_id" {
+  description = "AWS Organizations root ID."
+  value       = local.root_id
+}
+
+output "management_account_id" {
+  description = "AWS Organizations management account ID."
+  value       = local.management_account_id
+}
+
+output "existing_accounts" {
+  description = "Known existing AWS account IDs for the landing zone."
+  value       = local.existing_accounts
+}
+```

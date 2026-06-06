@@ -21,16 +21,53 @@ provider "aws" {
   region = "us-east-1"
 }
 
+#################################################
+# IMPORT EXISTING AWS ORGANIZATION AND ACCOUNTS
+#################################################
+# Replace o-xxxxxxxxxx with your real AWS Organization ID.
+#
+# Get it with:
+# aws organizations describe-organization --query 'Organization.Id' --output text
+
+import {
+  to = aws_organizations_organization.adiryx
+  id = "o-xxxxxxxxxx"
+}
+
+import {
+  to = aws_organizations_account.test
+  id = "295435084681"
+}
+
+import {
+  to = aws_organizations_account.network
+  id = "146727531495"
+}
+
+import {
+  to = aws_organizations_account.identity
+  id = "459524413424"
+}
+
+import {
+  to = aws_organizations_account.soc_platform
+  id = "124074140738"
+}
+
+#################################################
+# EXISTING AWS ORGANIZATION
+#################################################
+
 resource "aws_organizations_organization" "adiryx" {
   feature_set = "ALL"
 
   aws_service_access_principals = [
+    "account.amazonaws.com",
     "cloudtrail.amazonaws.com",
     "config.amazonaws.com",
     "guardduty.amazonaws.com",
     "securityhub.amazonaws.com",
-    "sso.amazonaws.com",
-    "account.amazonaws.com"
+    "sso.amazonaws.com"
   ]
 
   enabled_policy_types = [
@@ -90,12 +127,9 @@ resource "aws_organizations_organizational_unit" "non_production" {
 }
 
 #################################################
-# EXISTING AWS ACCOUNTS ONLY
+# EXISTING AWS ACCOUNTS
 #################################################
 
-# Existing account ID: 295435084681
-# Existing email: aws-test@adiryx.com
-# Terraform resource name must remain "test" to avoid destroy/recreate.
 resource "aws_organizations_account" "test" {
   name      = "adiryx-security"
   email     = "aws-test@adiryx.com"
@@ -103,9 +137,12 @@ resource "aws_organizations_account" "test" {
 
   iam_user_access_to_billing = "DENY"
   close_on_deletion          = false
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
-# Existing account ID: 146727531495
 resource "aws_organizations_account" "network" {
   name      = "adiryx-network"
   email     = "aws-network@adiryx.com"
@@ -113,9 +150,12 @@ resource "aws_organizations_account" "network" {
 
   iam_user_access_to_billing = "DENY"
   close_on_deletion          = false
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
-# Existing account ID: 459524413424
 resource "aws_organizations_account" "identity" {
   name      = "adiryx-identity"
   email     = "aws-identity@adiryx.com"
@@ -123,9 +163,12 @@ resource "aws_organizations_account" "identity" {
 
   iam_user_access_to_billing = "DENY"
   close_on_deletion          = false
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
-# Existing account ID: 124074140738
 resource "aws_organizations_account" "soc_platform" {
   name      = "adiryx-soc-platform"
   email     = "aws-soc-platform@adiryx.com"
@@ -133,6 +176,10 @@ resource "aws_organizations_account" "soc_platform" {
 
   iam_user_access_to_billing = "DENY"
   close_on_deletion          = false
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 #################################################
@@ -152,7 +199,9 @@ resource "aws_organizations_policy" "deny_leave_org" {
       {
         Sid      = "DenyLeaveOrganization"
         Effect   = "Deny"
-        Action   = ["organizations:LeaveOrganization"]
+        Action   = [
+          "organizations:LeaveOrganization"
+        ]
         Resource = "*"
       }
     ]
@@ -185,6 +234,10 @@ resource "aws_organizations_policy_attachment" "deny_leave_org_sandbox" {
 
 output "aws_organization_id" {
   value = data.aws_organizations_organization.current.id
+}
+
+output "aws_organization_root_id" {
+  value = local.root_id
 }
 
 output "adiryx_current_accounts" {

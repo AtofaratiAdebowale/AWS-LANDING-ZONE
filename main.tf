@@ -1,4 +1,3 @@
-```hcl
 terraform {
   required_version = ">= 1.6.0"
 
@@ -37,8 +36,8 @@ data "aws_organizations_organization" "current" {}
 #################################################
 
 locals {
-  organization_id       = "o-5myqq34j5n"
-  management_account_id = "719850720600"
+  organization_id       = data.aws_organizations_organization.current.id
+  management_account_id = data.aws_organizations_organization.current.master_account_id
   root_id               = data.aws_organizations_organization.current.roots[0].id
 
   existing_accounts = {
@@ -55,7 +54,7 @@ locals {
 
 output "organization_id" {
   description = "Existing AWS Organization ID."
-  value       = data.aws_organizations_organization.current.id
+  value       = local.organization_id
 }
 
 output "organization_arn" {
@@ -77,4 +76,3 @@ output "existing_accounts" {
   description = "Known existing AWS account IDs for the landing zone."
   value       = local.existing_accounts
 }
-```

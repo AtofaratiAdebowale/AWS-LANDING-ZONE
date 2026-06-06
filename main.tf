@@ -24,14 +24,10 @@ provider "aws" {
 #################################################
 # IMPORT EXISTING AWS ORGANIZATION AND ACCOUNTS
 #################################################
-# Replace o-xxxxxxxxxx with your real AWS Organization ID.
-#
-# Get it with:
-# aws organizations describe-organization --query 'Organization.Id' --output text
 
 import {
   to = aws_organizations_organization.adiryx
-  id = "o-xxxxxxxxxx"
+  id = "o-5myqq34j5n"
 }
 
 import {
@@ -75,188 +71,9 @@ resource "aws_organizations_organization" "adiryx" {
   ]
 }
 
-data "aws_organizations_organization" "current" {
-  depends_on = [aws_organizations_organization.adiryx]
-}
+data "aws_organizations_organization" "current" {}
 
 locals {
-  root_id = data.aws_organizations_organization.current.roots[0].id
-}
-
-#################################################
-# TOP-LEVEL OUs
-#################################################
-
-resource "aws_organizations_organizational_unit" "security" {
-  name      = "Security"
-  parent_id = local.root_id
-}
-
-resource "aws_organizations_organizational_unit" "infrastructure" {
-  name      = "Infrastructure"
-  parent_id = local.root_id
-}
-
-resource "aws_organizations_organizational_unit" "workloads" {
-  name      = "Workloads"
-  parent_id = local.root_id
-}
-
-resource "aws_organizations_organizational_unit" "sandbox" {
-  name      = "Sandbox"
-  parent_id = local.root_id
-}
-
-resource "aws_organizations_organizational_unit" "suspended" {
-  name      = "Suspended"
-  parent_id = local.root_id
-}
-
-#################################################
-# CHILD OUs
-#################################################
-
-resource "aws_organizations_organizational_unit" "production" {
-  name      = "Production"
-  parent_id = aws_organizations_organizational_unit.workloads.id
-}
-
-resource "aws_organizations_organizational_unit" "non_production" {
-  name      = "Non-Production"
-  parent_id = aws_organizations_organizational_unit.workloads.id
-}
-
-#################################################
-# EXISTING AWS ACCOUNTS
-#################################################
-
-resource "aws_organizations_account" "test" {
-  name      = "adiryx-security"
-  email     = "aws-test@adiryx.com"
-  parent_id = aws_organizations_organizational_unit.security.id
-
-  iam_user_access_to_billing = "DENY"
-  close_on_deletion          = false
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-resource "aws_organizations_account" "network" {
-  name      = "adiryx-network"
-  email     = "aws-network@adiryx.com"
-  parent_id = aws_organizations_organizational_unit.infrastructure.id
-
-  iam_user_access_to_billing = "DENY"
-  close_on_deletion          = false
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-resource "aws_organizations_account" "identity" {
-  name      = "adiryx-identity"
-  email     = "aws-identity@adiryx.com"
-  parent_id = aws_organizations_organizational_unit.infrastructure.id
-
-  iam_user_access_to_billing = "DENY"
-  close_on_deletion          = false
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-resource "aws_organizations_account" "soc_platform" {
-  name      = "adiryx-soc-platform"
-  email     = "aws-soc-platform@adiryx.com"
-  parent_id = aws_organizations_organizational_unit.non_production.id
-
-  iam_user_access_to_billing = "DENY"
-  close_on_deletion          = false
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-#################################################
-# BASIC SCP
-#################################################
-
-resource "aws_organizations_policy" "deny_leave_org" {
-  name        = "DenyLeaveOrganization"
-  description = "Prevents member accounts from leaving the AWS Organization."
-  type        = "SERVICE_CONTROL_POLICY"
-
-  depends_on = [aws_organizations_organization.adiryx]
-
-  content = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid      = "DenyLeaveOrganization"
-        Effect   = "Deny"
-        Action   = [
-          "organizations:LeaveOrganization"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-resource "aws_organizations_policy_attachment" "deny_leave_org_security" {
-  policy_id = aws_organizations_policy.deny_leave_org.id
-  target_id = aws_organizations_organizational_unit.security.id
-}
-
-resource "aws_organizations_policy_attachment" "deny_leave_org_infrastructure" {
-  policy_id = aws_organizations_policy.deny_leave_org.id
-  target_id = aws_organizations_organizational_unit.infrastructure.id
-}
-
-resource "aws_organizations_policy_attachment" "deny_leave_org_workloads" {
-  policy_id = aws_organizations_policy.deny_leave_org.id
-  target_id = aws_organizations_organizational_unit.workloads.id
-}
-
-resource "aws_organizations_policy_attachment" "deny_leave_org_sandbox" {
-  policy_id = aws_organizations_policy.deny_leave_org.id
-  target_id = aws_organizations_organizational_unit.sandbox.id
-}
-
-#################################################
-# OUTPUTS
-#################################################
-
-output "aws_organization_id" {
-  value = data.aws_organizations_organization.current.id
-}
-
-output "aws_organization_root_id" {
-  value = local.root_id
-}
-
-output "adiryx_current_accounts" {
-  value = {
-    security     = aws_organizations_account.test.name
-    network      = aws_organizations_account.network.name
-    identity     = aws_organizations_account.identity.name
-    soc_platform = aws_organizations_account.soc_platform.name
-  }
-}
-
-output "adiryx_ou_structure" {
-  value = {
-    security        = aws_organizations_organizational_unit.security.id
-    infrastructure = aws_organizations_organizational_unit.infrastructure.id
-    workloads      = aws_organizations_organizational_unit.workloads.id
-    production     = aws_organizations_organizational_unit.production.id
-    non_production = aws_organizations_organizational_unit.non_production.id
-    sandbox        = aws_organizations_organizational_unit.sandbox.id
-    suspended      = aws_organizations_organizational_unit.suspended.id
-  }
+  root_id               = data.aws_organizations_organization.current.roots[0].id
+  management_account_id = "719850720600"
 }

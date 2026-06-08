@@ -55,9 +55,8 @@ locals {
   #################################################
   # Account definitions
   #
-  # IMPORTANT:
-  # - Existing accounts must be imported into state.
-  # - New accounts require unique email addresses.
+  # Existing accounts have account_id.
+  # New accounts do not have account_id.
   #################################################
 
   accounts = {
@@ -189,11 +188,30 @@ locals {
 }
 
 #################################################
-# AWS ORGANIZATION ACCOUNTS
+# ACCOUNT SPLIT
+#
+# Existing accounts have account_id and must NOT be created.
+# New accounts do not have account_id and can be created.
+#################################################
+
+locals {
+  existing_accounts = {
+    for key, account in local.accounts : key => account
+    if try(account.account_id, null) != null
+  }
+
+  accounts_to_create = {
+    for key, account in local.accounts : key => account
+    if try(account.account_id, null) == null
+  }
+}
+
+#################################################
+# AWS ORGANIZATION ACCOUNTS - CREATE NEW ONLY
 #################################################
 
 resource "aws_organizations_account" "accounts" {
-  for_each = local.accounts
+  for_each = local.accounts_to_create
 
   name      = each.value.name
   email     = each.value.email
@@ -242,6 +260,7 @@ output "management_account_id" {
 
 output "organizational_units" {
   description = "Created AWS Organizational Units."
+
   value = {
     security       = aws_organizations_organizational_unit.security.id
     infrastructure = aws_organizations_organizational_unit.infrastructure.id
@@ -252,17 +271,30 @@ output "organizational_units" {
     suspended      = aws_organizations_organizational_unit.suspended.id
   }
 }
-/*
+
 output "accounts" {
-  description = "AWS Organization accounts managed by Terraform."
-  value = {
-    for key, account in aws_organizations_account.accounts : key => {
-      name      = account.name
-      id        = account.id
-      arn       = account.arn
-      email     = account.email
-      parent_id = account.parent_id
+  description = "AWS Organization accounts known to this landing zone."
+
+  value = merge(
+    {
+      for key, account in aws_organizations_account.accounts : key => {
+        name      = account.name
+        id        = account.id
+        arn       = account.arn
+        email     = account.email
+        parent_id = account.parent_id
+        source    = "created_by_terraform"
+      }
+    },
+    {
+      for key, account in local.existing_accounts : key => {
+        name      = account.name
+        id        = account.account_id
+        arn       = "arn:aws:organizations::${local.management_account_id}:account/${local.organization_id}/${account.account_id}"
+        email     = account.email
+        parent_id = local.ou_ids[account.parent_ou]
+        source    = "existing_account_not_created_by_terraform"
+      }
     }
-  }
+  )
 }
-*/

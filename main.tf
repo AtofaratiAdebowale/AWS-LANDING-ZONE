@@ -191,7 +191,7 @@ locals {
 #################################################
 # AWS ORGANIZATION ACCOUNTS
 #################################################
-
+/* 
 resource "aws_organizations_account" "accounts" {
   for_each = local.accounts
 
@@ -215,7 +215,7 @@ resource "aws_organizations_account" "accounts" {
     prevent_destroy = true
   }
 }
-
+*/
 #################################################
 # OUTPUTS
 #################################################

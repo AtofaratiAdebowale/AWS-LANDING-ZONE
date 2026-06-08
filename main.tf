@@ -252,7 +252,7 @@ output "organizational_units" {
     suspended      = aws_organizations_organizational_unit.suspended.id
   }
 }
-
+/*
 output "accounts" {
   description = "AWS Organization accounts managed by Terraform."
   value = {
@@ -265,3 +265,4 @@ output "accounts" {
     }
   }
 }
+*/

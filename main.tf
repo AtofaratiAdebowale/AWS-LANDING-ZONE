@@ -1,12 +1,18 @@
 #################################################
-# STATE CLEANUP
+# STATE CLEANUP - UAT ACCOUNT
 #
-# Remove old UAT account from Terraform state only.
-# This does NOT destroy the AWS account.
+# This moves the old UAT for_each instance to a
+# temporary Terraform address, then removes it from
+# Terraform state without destroying the AWS account.
 #################################################
 
-removed {
+moved {
   from = aws_organizations_account.accounts["uat"]
+  to   = aws_organizations_account.uat_removed
+}
+
+removed {
+  from = aws_organizations_account.uat_removed
 
   lifecycle {
     destroy = false

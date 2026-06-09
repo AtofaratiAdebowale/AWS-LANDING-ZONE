@@ -111,9 +111,9 @@ locals {
       account_id = local.existing_account_ids.test
     }
 
-    uat = {
-      name      = "adiryx-uat"
-      email     = "aws-uat@adiryx.com"
+    database = {
+      name      = "adiryx-dev-database"
+      email     = "aws-database@adiryx.com"
       parent_ou = "non_production"
     }
 

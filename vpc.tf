@@ -7,14 +7,21 @@
 # - No Internet Gateway
 # - No public subnet
 # - No VPC endpoints
+#
+# IMPORTANT:
+# Do not run Terraform with AWS root credentials.
+# Use an IAM user, IAM Identity Center profile, or IAM role
+# in the management account that can assume this role.
 #################################################
 
 provider "aws" {
-  alias  = "database"
-  region = "us-east-1"
+  alias   = "database"
+  region  = "us-east-1"
+  profile = "management"
 
   assume_role {
-    role_arn = "arn:aws:iam::${aws_organizations_account.accounts["database"].id}:role/OrganizationAccountAccessRole"
+    role_arn     = "arn:aws:iam::286217082321:role/OrganizationAccountAccessRole"
+    session_name = "terraform-database"
   }
 }
 

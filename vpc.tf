@@ -1,17 +1,15 @@
 #################################################
 # DATABASE ACCOUNT PROVIDER
 #
-# Cheapest option:
-# - Private-only VPC
-# - No NAT Gateway
-# - No Internet Gateway
-# - No public subnet
-# - No VPC endpoints
+# GitHub / VS Code local version.
 #
 # IMPORTANT:
 # Do not run Terraform with AWS root credentials.
-# Export IAM user or IAM Identity Center credentials
-# before running terraform plan/apply.
+# Your VS Code terminal must be authenticated with
+# IAM user credentials or IAM Identity Center credentials
+# that can assume:
+#
+# arn:aws:iam::286217082321:role/OrganizationAccountAccessRole
 #################################################
 
 provider "aws" {

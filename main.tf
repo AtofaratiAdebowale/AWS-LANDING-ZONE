@@ -1,20 +1,310 @@
-#################################################
-# STATE CLEANUP - UAT ACCOUNT
-#
-# This moves the old UAT for_each instance to a
-# temporary Terraform address, then removes it from
-# Terraform state without destroying the AWS account.
-#################################################
+terraform {
+  required_version = ">= 1.6.0"
 
-moved {
-  from = aws_organizations_account.accounts["uat"]
-  to   = aws_organizations_account.uat_removed
+  cloud {
+    organization = "CGIATO2"
+
+    workspaces {
+      name = "AWS-LANDING-ZONE"
+    }
+  }
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
 }
 
-removed {
-  from = aws_organizations_account.uat_removed
+#################################################
+# AWS PROVIDER
+#################################################
+
+provider "aws" {
+  region = "us-east-1"
+}
+
+#################################################
+# EXISTING AWS ORGANIZATION - READ ONLY
+#################################################
+
+data "aws_organizations_organization" "current" {}
+
+#################################################
+# LANDING ZONE LOCALS
+#################################################
+
+locals {
+  organization_id       = data.aws_organizations_organization.current.id
+  organization_arn      = data.aws_organizations_organization.current.arn
+  management_account_id = data.aws_organizations_organization.current.master_account_id
+  root_id               = data.aws_organizations_organization.current.roots[0].id
+
+  #################################################
+  # Existing AWS accounts already known
+  #################################################
+
+  existing_account_ids = {
+    test         = "295435084681"
+    network      = "146727531495"
+    identity     = "459524413424"
+    soc_platform = "124074140738"
+  }
+
+  #################################################
+  # Account definitions
+  #
+  # Existing accounts have account_id.
+  # New Terraform-managed accounts do not have account_id.
+  #
+  # UAT is intentionally removed.
+  # DEV is included as the replacement workload account.
+  #################################################
+
+  accounts = {
+    log_archive = {
+      name      = "adiryx-log-archive"
+      email     = "aws-log-archive@adiryx.com"
+      parent_ou = "security"
+    }
+
+    security_tooling = {
+      name      = "adiryx-security-tooling"
+      email     = "aws-security-tooling@adiryx.com"
+      parent_ou = "security"
+    }
+
+    network = {
+      name       = "adiryx-network"
+      email      = "aws-network@adiryx.com"
+      parent_ou  = "infrastructure"
+      account_id = local.existing_account_ids.network
+    }
+
+    identity = {
+      name       = "adiryx-identity"
+      email      = "aws-identity@adiryx.com"
+      parent_ou  = "infrastructure"
+      account_id = local.existing_account_ids.identity
+    }
+
+    shared_services = {
+      name      = "adiryx-shared-services"
+      email     = "aws-shared-services@adiryx.com"
+      parent_ou = "infrastructure"
+    }
+
+    prod = {
+      name      = "adiryx-prod"
+      email     = "aws-prod@adiryx.com"
+      parent_ou = "production"
+    }
+
+    dev = {
+      name      = "adiryx-dev"
+      email     = "aws-dev@adiryx.com"
+      parent_ou = "non_production"
+    }
+
+    test = {
+      name       = "adiryx-test"
+      email      = "aws-test@adiryx.com"
+      parent_ou  = "non_production"
+      account_id = local.existing_account_ids.test
+    }
+
+    database = {
+      name      = "adiryx-database"
+      email     = "aws-database@adiryx.com"
+      parent_ou = "non_production"
+    }
+
+    soc_platform = {
+      name       = "adiryx-soc-platform"
+      email      = "aws-soc-platform@adiryx.com"
+      parent_ou  = "non_production"
+      account_id = local.existing_account_ids.soc_platform
+    }
+
+    sandbox = {
+      name      = "adiryx-sandbox"
+      email     = "aws-sandbox@adiryx.com"
+      parent_ou = "sandbox"
+    }
+  }
+}
+
+#################################################
+# ORGANIZATIONAL UNITS
+#################################################
+
+resource "aws_organizations_organizational_unit" "security" {
+  name      = "Security"
+  parent_id = local.root_id
+}
+
+resource "aws_organizations_organizational_unit" "infrastructure" {
+  name      = "Infrastructure"
+  parent_id = local.root_id
+}
+
+resource "aws_organizations_organizational_unit" "workloads" {
+  name      = "Workloads"
+  parent_id = local.root_id
+}
+
+resource "aws_organizations_organizational_unit" "production" {
+  name      = "Production"
+  parent_id = aws_organizations_organizational_unit.workloads.id
+}
+
+resource "aws_organizations_organizational_unit" "non_production" {
+  name      = "Non-Production"
+  parent_id = aws_organizations_organizational_unit.workloads.id
+}
+
+resource "aws_organizations_organizational_unit" "sandbox" {
+  name      = "Sandbox"
+  parent_id = local.root_id
+}
+
+resource "aws_organizations_organizational_unit" "suspended" {
+  name      = "Suspended"
+  parent_id = local.root_id
+}
+
+#################################################
+# OU LOOKUP MAP
+#################################################
+
+locals {
+  ou_ids = {
+    security       = aws_organizations_organizational_unit.security.id
+    infrastructure = aws_organizations_organizational_unit.infrastructure.id
+    workloads      = aws_organizations_organizational_unit.workloads.id
+    production     = aws_organizations_organizational_unit.production.id
+    non_production = aws_organizations_organizational_unit.non_production.id
+    sandbox        = aws_organizations_organizational_unit.sandbox.id
+    suspended      = aws_organizations_organizational_unit.suspended.id
+  }
+}
+
+#################################################
+# ACCOUNT SPLIT
+#
+# Existing accounts have account_id and must NOT be created.
+# New accounts do not have account_id and can be created.
+#################################################
+
+locals {
+  existing_accounts = {
+    for key, account in local.accounts : key => account
+    if try(account.account_id, null) != null
+  }
+
+  accounts_to_create = {
+    for key, account in local.accounts : key => account
+    if try(account.account_id, null) == null
+  }
+}
+
+#################################################
+# AWS ORGANIZATION ACCOUNTS - CREATE NEW ONLY
+#
+# UAT is not present in local.accounts.
+# If UAT exists in Terraform state as:
+#
+#   aws_organizations_account.accounts["uat"]
+#
+# Terraform will plan to destroy/remove it from the Organization.
+#################################################
+
+resource "aws_organizations_account" "accounts" {
+  for_each = local.accounts_to_create
+
+  name      = each.value.name
+  email     = each.value.email
+  parent_id = local.ou_ids[each.value.parent_ou]
+
+  role_name = "OrganizationAccountAccessRole"
+
+  iam_user_access_to_billing = "DENY"
+
+  close_on_deletion = false
+
+  tags = {
+    ManagedBy   = "Terraform"
+    Environment = each.value.parent_ou
+    Project     = "Adiryx Landing Zone"
+  }
 
   lifecycle {
-    destroy = false
+    prevent_destroy = false
   }
+}
+
+#################################################
+# OUTPUTS
+#################################################
+
+output "organization_id" {
+  description = "Existing AWS Organization ID."
+  value       = local.organization_id
+}
+
+output "organization_arn" {
+  description = "Existing AWS Organization ARN."
+  value       = local.organization_arn
+}
+
+output "root_id" {
+  description = "AWS Organizations root ID."
+  value       = local.root_id
+}
+
+output "management_account_id" {
+  description = "AWS Organizations management account ID."
+  value       = local.management_account_id
+}
+
+output "organizational_units" {
+  description = "Created AWS Organizational Units."
+
+  value = {
+    security       = aws_organizations_organizational_unit.security.id
+    infrastructure = aws_organizations_organizational_unit.infrastructure.id
+    workloads      = aws_organizations_organizational_unit.workloads.id
+    production     = aws_organizations_organizational_unit.production.id
+    non_production = aws_organizations_organizational_unit.non_production.id
+    sandbox        = aws_organizations_organizational_unit.sandbox.id
+    suspended      = aws_organizations_organizational_unit.suspended.id
+  }
+}
+
+output "accounts" {
+  description = "AWS Organization accounts known to this landing zone."
+
+  value = merge(
+    {
+      for key, account in aws_organizations_account.accounts : key => {
+        name      = account.name
+        id        = account.id
+        arn       = account.arn
+        email     = account.email
+        parent_id = account.parent_id
+        source    = "created_by_terraform"
+      }
+    },
+    {
+      for key, account in local.existing_accounts : key => {
+        name      = account.name
+        id        = account.account_id
+        arn       = "arn:aws:organizations::${local.management_account_id}:account/${local.organization_id}/${account.account_id}"
+        email     = account.email
+        parent_id = local.ou_ids[account.parent_ou]
+        source    = "existing_account_not_created_by_terraform"
+      }
+    }
+  )
 }

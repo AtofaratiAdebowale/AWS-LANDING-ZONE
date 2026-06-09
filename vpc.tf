@@ -10,14 +10,13 @@
 #
 # IMPORTANT:
 # Do not run Terraform with AWS root credentials.
-# Use an IAM user, IAM Identity Center profile, or IAM role
-# in the management account that can assume this role.
+# Export IAM user or IAM Identity Center credentials
+# before running terraform plan/apply.
 #################################################
 
 provider "aws" {
-  alias   = "database"
-  region  = "us-east-1"
-  profile = "management"
+  alias  = "database"
+  region = "us-east-1"
 
   assume_role {
     role_arn     = "arn:aws:iam::286217082321:role/OrganizationAccountAccessRole"
